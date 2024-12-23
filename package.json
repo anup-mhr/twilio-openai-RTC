@@ -1,0 +1,24 @@
+{
+  "name": "twilio-test",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start:incoming": "node src/incoming-call.js",
+    "start:outgoing": "node src/outbound-call.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "@ngrok/ngrok": "^1.4.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "openai": "^4.20.0",
+    "socket.io": "^4.7.2",
+    "twilio": "^4.19.0",
+    "web-audio-api": "^0.2.2",
+    "ws": "^8.14.2"
+  },
+  "author": "",
+  "license": "ISC"
+}
