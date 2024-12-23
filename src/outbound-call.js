@@ -4,14 +4,14 @@ import ngrok from "@ngrok/ngrok";
 import express from "express";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
-import { SYSTEM_MESSAGE, VOICE, LOG_EVENT_TYPES } from "./constants";
+import { SYSTEM_MESSAGE, VOICE, LOG_EVENT_TYPES } from "./constants.js";
 import {
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE_NUMBER,
   OPENAI_API_KEY,
   PORT,
-} from "./config";
+} from "./config.js";
 
 // Function to make an outbound call
 async function makeCall(to, req) {
