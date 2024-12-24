@@ -1,38 +1,35 @@
-import twilio from "twilio";
-import WebSocket from "ws";
 import ngrok from "@ngrok/ngrok";
 import express from "express";
 import { createServer } from "http";
-import { WebSocketServer } from "ws";
-import { SYSTEM_MESSAGE, VOICE, LOG_EVENT_TYPES } from "./constants.js";
+import twilio from "twilio";
+import WebSocket, { WebSocketServer } from "ws";
 import {
+  OPENAI_API_KEY,
+  PORT,
   TWILIO_ACCOUNT_SID,
   TWILIO_AUTH_TOKEN,
   TWILIO_PHONE_NUMBER,
-  OPENAI_API_KEY,
-  PORT,
-} from "./config.js";
+} from "./config/env.config.js";
+import {
+  LOG_EVENT_TYPES,
+  SYSTEM_MESSAGE,
+  VOICE,
+} from "./constants/constants.js";
+import executeFunction from "./utils/execute.js";
+import { process_order_definition } from "./utils/processOrder.js";
+import { search_product_definition } from "./utils/searchProduct.js";
 
-// Function to make an outbound call
 async function makeCall(to, req) {
   try {
-    //todo:for now make number constant
-    // const isAllowed = await isNumberAllowed(to);
-    // if (!isAllowed) {
-    //   console.warn(
-    //     `The number ${to} is not recognized as a valid outgoing number or caller ID.`
-    //   );
-    //   process.exit(1);
-    // }
-
     const call = await client.calls.create({
       from: TWILIO_PHONE_NUMBER,
       to,
       twiml: `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Amy-Neural">
             Hello! This is your AI assistant calling. How can I help you today?
-          </Say><Connect><Stream url="wss://${req.headers.host}/stream" /></Connect></Response>`,
+          </Say><Connect><Stream url="wss://${req.headers.host}/stream" mode="speech"/></Connect></Response>`,
     });
     console.log(`Call started with SID: ${call.sid}`);
+    return call.sid;
   } catch (error) {
     console.error("Error making call:", error);
   }
@@ -41,7 +38,7 @@ async function makeCall(to, req) {
 // Initialize the Twilio library and set our outgoing call TwiML
 const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
 
-// Initialize Fastify
+// Initialize express app
 const app = express();
 const server = createServer(app);
 app.use(express.json());
@@ -53,8 +50,8 @@ app.post("/make-call", async (req, res) => {
     res.status(400).json({ error: "Missing to parameter" });
     return;
   }
-  makeCall(req.body.to, req);
-  res.json({ success: true });
+  const callerId = await makeCall(req.body.to, req);
+  res.json({ success: true, callerId });
 });
 
 // WebSocket server setup
@@ -89,28 +86,30 @@ wss.on("connection", async (ws) => {
         instructions: SYSTEM_MESSAGE,
         modalities: ["text", "audio"],
         temperature: 0.8,
+        tool_choice: "auto",
+        tools: [process_order_definition, search_product_definition],
       },
     };
 
     console.log("Sending session update:", JSON.stringify(sessionUpdate));
     openAiWs.send(JSON.stringify(sessionUpdate));
 
-    const initialConversationItem = {
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: 'Greet the user with "Hello there! I\'m an AI voice assistant from Palmmind Realtime API. How can I help?"',
-          },
-        ],
-      },
-    };
+    // const initialConversationItem = {
+    //   type: "conversation.item.create",
+    //   item: {
+    //     type: "message",
+    //     role: "user",
+    //     content: [
+    //       {
+    //         type: "input_text",
+    //         text: 'Greet the user with "Hello there! I\'m an AI voice assistant from Palmmind Realtime API. How can I help?"',
+    //       },
+    //     ],
+    //   },
+    // };
 
     // openAiWs.send(JSON.stringify(initialConversationItem));
-    openAiWs.send(JSON.stringify({ type: "response.create" }));
+    // openAiWs.send(JSON.stringify({ type: "response.create" }));
   };
 
   openAiWs.on("open", () => {
@@ -119,7 +118,7 @@ wss.on("connection", async (ws) => {
   });
 
   // Listen for messages from the OpenAI WebSocket (and send to Twilio if necessary)
-  openAiWs.on("message", (data) => {
+  openAiWs.on("message", async (data) => {
     try {
       const response = JSON.parse(data);
 
@@ -129,8 +128,56 @@ wss.on("connection", async (ws) => {
 
       if (response.type === "session.updated") {
         console.log("Session updated successfully:", response);
+        // const welcome_message = {
+        //   type: "conversation.item.create",
+        //   item: {
+        //     type: "message",
+        //     role: "user",
+        //     content: [
+        //       {
+        //         type: "input_text",
+        //         text: "Hello!",
+        //       },
+        //     ],
+        //   },
+        // };
+        // openAiWs.send(JSON.stringify(welcome_message));
+        // openAiWs.send(JSON.stringify({ type: "response.create" }));
       }
 
+      if (response.type === "response.function_call_arguments.done") {
+        console.log("Received function call arguments:", response);
+        let result = await executeFunction(response);
+
+        const response_message = {
+          type: "conversation.item.create",
+          item: {
+            type: "function_call_output",
+            call_id: streamSid,
+            output: result["result"],
+          },
+        };
+
+        openAiWs.send(JSON.stringify(response_message));
+
+        let instructions = `
+          Respond to the user's question based on this information:
+          === 
+          ${result["result"]}. 
+          ===
+          Be concise and friendly.
+        `;
+        console.log("Generate audio response:", instructions);
+
+        const response_create = {
+          type: "response.create",
+          response: {
+            modalities: ["text", "audio"],
+            instructions: instructions,
+          },
+        };
+        openAiWs.send(JSON.stringify(response_create));
+      }
       if (response.type === "response.audio.delta" && response.delta) {
         const audioDelta = {
           event: "media",
