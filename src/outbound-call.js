@@ -26,7 +26,7 @@ async function makeCall(to, req) {
       to,
       twiml: `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Amy-Neural">
             Hello! This is your AI assistant calling. How can I help you today?
-          </Say><Connect><Stream url="wss://${req.headers.host}/stream" mode="speech"/></Connect></Response>`,
+          </Say><Connect><Stream url="wss://${req.headers.host}/stream" /></Connect></Response>`,
     });
     console.log(`Call started with SID: ${call.sid}`);
     return call.sid;

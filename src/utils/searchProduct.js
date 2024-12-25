@@ -1,3 +1,5 @@
+import fs from "fs/promises";
+
 export const search_product_definition = {
   type: "function",
   name: "searchProduct",
@@ -33,13 +35,13 @@ export async function searchProduct(parameters) {
 
     if (product) {
       return {
-        result: `The order with ID ${product.name} is ${product.price}.`,
+        result: `The price of product ${product.name} is ${product.price}.`,
       };
     }
 
-    return { result: `No order found with ID ${productName}.` };
+    return { result: `No product found with product name ${productName}.` };
   } catch (error) {
-    console.error("Error reading orders file:", error);
-    return { result: "An error occurred while processing the order." };
+    console.error("Error reading products file:", error);
+    return { result: "An error occurred while processing the ptoducts." };
   }
 }
