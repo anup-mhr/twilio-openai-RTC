@@ -20,8 +20,7 @@ export const search_product_definition = {
 };
 
 export async function searchProduct(parameters) {
-  const productName = parameters?.product_name;
-
+  const productName = JSON.parse(parameters)?.product_name.toLowerCase();
   try {
     const productsData = await fs.readFile(
       "./src/dummyData/products.json",

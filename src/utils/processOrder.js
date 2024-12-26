@@ -20,7 +20,7 @@ export const process_order_definition = {
 };
 
 export async function processOrder(parameters) {
-  const orderId = parameters?.order_id;
+  const orderId = JSON.parse(parameters)?.order_id;
 
   try {
     const ordersData = await fs.readFile(

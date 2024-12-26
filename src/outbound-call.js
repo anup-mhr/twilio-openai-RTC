@@ -93,29 +93,16 @@ wss.on("connection", async (ws) => {
 
     console.log("Sending session update:", JSON.stringify(sessionUpdate));
     openAiWs.send(JSON.stringify(sessionUpdate));
-
-    // const initialConversationItem = {
-    //   type: "conversation.item.create",
-    //   item: {
-    //     type: "message",
-    //     role: "user",
-    //     content: [
-    //       {
-    //         type: "input_text",
-    //         text: 'Greet the user with "Hello there! I\'m an AI voice assistant from Palmmind Realtime API. How can I help?"',
-    //       },
-    //     ],
-    //   },
-    // };
-
-    // openAiWs.send(JSON.stringify(initialConversationItem));
-    // openAiWs.send(JSON.stringify({ type: "response.create" }));
   };
 
   openAiWs.on("open", () => {
     console.log("Connected to the OpenAI Realtime API");
     setTimeout(sendInitialSessionUpdate, 100); // Ensure connection stability, send after .1 second
   });
+
+  // Add a map to store user messages by item_id
+  const userMessageMap = new Map();
+  let lastMessageId = null;
 
   // Listen for messages from the OpenAI WebSocket (and send to Twilio if necessary)
   openAiWs.on("message", async (data) => {
@@ -128,21 +115,24 @@ wss.on("connection", async (ws) => {
 
       if (response.type === "session.updated") {
         console.log("Session updated successfully:", response);
-        // const welcome_message = {
-        //   type: "conversation.item.create",
-        //   item: {
-        //     type: "message",
-        //     role: "user",
-        //     content: [
-        //       {
-        //         type: "input_text",
-        //         text: "Hello!",
-        //       },
-        //     ],
-        //   },
-        // };
-        // openAiWs.send(JSON.stringify(welcome_message));
-        // openAiWs.send(JSON.stringify({ type: "response.create" }));
+      }
+
+      // When receiving a user message, store its ID
+      if (
+        response.type === "conversation.item.created" &&
+        response.item?.type === "message" &&
+        response.item?.role === "user"
+      ) {
+        lastMessageId = response.item.id;
+      }
+
+      // When receiving a transcript update
+      if (
+        response.type === "response.audio_transcript.done" &&
+        response.item_id === lastMessageId &&
+        response.transcript
+      ) {
+        userMessageMap.set(lastMessageId, response.transcript);
       }
 
       if (response.type === "response.function_call_arguments.done") {
@@ -160,6 +150,9 @@ wss.on("connection", async (ws) => {
 
         openAiWs.send(JSON.stringify(response_message));
 
+        // Get the user's message using the call_id
+        const userMessage = userMessageMap.get(response.call_id) || "";
+        console.log(`User said: ${userMessage}`);
         let instructions = `
           Respond to the user's question based on this information:
           === 
@@ -177,6 +170,9 @@ wss.on("connection", async (ws) => {
           },
         };
         openAiWs.send(JSON.stringify(response_create));
+
+        // Optionally, clean up the stored message
+        userMessageMap.delete(response.call_id);
       }
       if (response.type === "response.audio.delta" && response.delta) {
         const audioDelta = {

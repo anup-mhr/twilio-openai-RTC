@@ -27,6 +27,7 @@ const VOICE = "alloy"; //alloy, ash, ballad, coral, echo sage, shimmer and verse
 const LOG_EVENT_TYPES = [
   "error",
   "response.content.done",
+  "response.audio_transcript.done",
   "rate_limits.updated",
   "response.done",
   "input_audio_buffer.committed",
@@ -34,6 +35,7 @@ const LOG_EVENT_TYPES = [
   "input_audio_buffer.speech_started",
   "response.function_call_arguments.done",
   "session.created",
+  "conversation.item.created",
 ];
 
 export { SYSTEM_MESSAGE, VOICE, LOG_EVENT_TYPES };
